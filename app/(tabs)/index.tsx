@@ -1,4 +1,4 @@
-import { StyleSheet, Animated, PanResponder, View } from 'react-native';
+import { StyleSheet, Animated, PanResponder, View, Pressable } from 'react-native';
 import { useRef, useState } from 'react';
 import { ThemedView } from '@/components/ThemedView';
 
@@ -6,11 +6,24 @@ interface TrailPoint {
   x: number;
   y: number;
   id: number;
+  color: string;
 }
+
+const COLORS = [
+  '#FFD700', // Gold
+  '#FF0000', // Red
+  '#00FF00', // Lime
+  '#0000FF', // Blue
+  '#FF00FF', // Magenta
+  '#00FFFF', // Cyan
+  '#FFA500', // Orange
+  '#800080', // Purple
+];
 
 export default function HomeScreen() {
   const pan = useRef(new Animated.ValueXY()).current;
   const [trail, setTrail] = useState<TrailPoint[]>([]);
+  const [currentColor, setCurrentColor] = useState(COLORS[0]);
   const nextId = useRef(0);
   const lastPoint = useRef({ x: 0, y: 0 });
 
@@ -32,7 +45,8 @@ export default function HomeScreen() {
           {
             x: interpolatedX,
             y: interpolatedY,
-            id: nextId.current++
+            id: nextId.current++,
+            color: currentColor
           }
         ]);
       }
@@ -63,33 +77,52 @@ export default function HomeScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      {/* Render trail points */}
-      {trail.map((point) => (
-        <View
-          key={point.id}
+      {/* Drawing Area */}
+      <View style={styles.drawingArea}>
+        {/* Render trail points */}
+        {trail.map((point) => (
+          <View
+            key={point.id}
+            style={[
+              styles.trailPoint,
+              {
+                left: point.x - 30,
+                top: point.y - 30,
+                backgroundColor: point.color + '4D', // Adding 30% opacity
+              }
+            ]}
+          />
+        ))}
+        
+        {/* Moving ball */}
+        <Animated.View
           style={[
-            styles.trailPoint,
+            styles.ball,
             {
-              left: point.x - 30, // Offset by half the width
-              top: point.y - 30,  // Offset by half the height
+              transform: [
+                { translateX: pan.x },
+                { translateY: pan.y }
+              ],
+              backgroundColor: currentColor,
             }
           ]}
+          {...panResponder.panHandlers}
         />
-      ))}
-      
-      {/* Moving ball */}
-      <Animated.View
-        style={[
-          styles.ball,
-          {
-            transform: [
-              { translateX: pan.x },
-              { translateY: pan.y }
-            ]
-          }
-        ]}
-        {...panResponder.panHandlers}
-      />
+      </View>
+
+      {/* Color Picker */}
+      <View style={styles.colorPicker}>
+        {COLORS.map((color, index) => (
+          <Pressable
+            key={color}
+            style={[
+              styles.colorOption,
+              { backgroundColor: color }
+            ]}
+            onPress={() => setCurrentColor(color)}
+          />
+        ))}
+      </View>
     </ThemedView>
   );
 }
@@ -97,6 +130,17 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    flexDirection: 'row', // For landscape mode
+  },
+  drawingArea: {
+    flex: 1,
+    backgroundColor: '#f0f0f0',
+  },
+  colorPicker: {
+    width: 80,
+    backgroundColor: '#e0e0e0',
+    padding: 10,
+    gap: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -104,14 +148,20 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'yellow',
     position: 'absolute',
   },
   trailPoint: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 0, 0.3)',
     position: 'absolute',
+  },
+  colorOption: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    margin: 5,
+    borderWidth: 2,
+    borderColor: '#fff',
   }
 });
