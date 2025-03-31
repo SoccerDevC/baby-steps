@@ -1,5 +1,5 @@
-import { StyleSheet, Animated, PanResponder, View, Pressable } from 'react-native';
-import { useRef, useState } from 'react';
+import { StyleSheet, View, Pressable, Dimensions } from 'react-native';
+import { useState, useEffect } from 'react';
 import { ThemedView } from '@/components/ThemedView';
 
 interface TrailPoint {
@@ -21,16 +21,18 @@ const COLORS = [
 ];
 
 export default function HomeScreen() {
-  const pan = useRef(new Animated.ValueXY()).current;
   const [trail, setTrail] = useState<TrailPoint[]>([]);
   const [currentColor, setCurrentColor] = useState(COLORS[0]);
-  const nextId = useRef(0);
-  const lastPoint = useRef({ x: 0, y: 0 });
+  const [nextId, setNextId] = useState(0);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [lastPoint, setLastPoint] = useState({ x: 0, y: 0 });
 
   const addTrailPoint = (x: number, y: number) => {
+    if (!isDrawing) return;
+
     // Calculate distance from last point
-    const dx = x - lastPoint.current.x;
-    const dy = y - lastPoint.current.y;
+    const dx = x - lastPoint.x;
+    const dy = y - lastPoint.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
     // If distance is significant, add intermediate points
@@ -38,47 +40,59 @@ export default function HomeScreen() {
       const steps = Math.floor(distance / 5);
       for (let i = 1; i <= steps; i++) {
         const ratio = i / steps;
-        const interpolatedX = lastPoint.current.x + dx * ratio;
-        const interpolatedY = lastPoint.current.y + dy * ratio;
+        const interpolatedX = lastPoint.x + dx * ratio;
+        const interpolatedY = lastPoint.y + dy * ratio;
         setTrail(currentTrail => [
           ...currentTrail,
           {
             x: interpolatedX,
             y: interpolatedY,
-            id: nextId.current++,
+            id: nextId + i,
             color: currentColor
           }
         ]);
       }
+      setNextId(nextId + steps);
     }
     
-    lastPoint.current = { x, y };
+    setLastPoint({ x, y });
   };
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, gestureState) => {
-        Animated.event([
-          null,
-          { dx: pan.x, dy: pan.y }
-        ], { useNativeDriver: false })(_, gestureState);
-
-        addTrailPoint(gestureState.moveX, gestureState.moveY);
-      },
-      onPanResponderRelease: () => {
-        Animated.spring(pan, {
-          toValue: { x: 0, y: 0 },
-          useNativeDriver: false
-        }).start();
+  const handleTouchStart = (event: any) => {
+    const touch = event.nativeEvent;
+    setIsDrawing(true);
+    setLastPoint({ x: touch.pageX, y: touch.pageY });
+    // Add first point immediately
+    setTrail(currentTrail => [
+      ...currentTrail,
+      {
+        x: touch.pageX,
+        y: touch.pageY,
+        id: nextId,
+        color: currentColor
       }
-    })
-  ).current;
+    ]);
+    setNextId(nextId + 1);
+  };
+
+  const handleTouchMove = (event: any) => {
+    const touch = event.nativeEvent;
+    addTrailPoint(touch.pageX, touch.pageY);
+  };
+
+  const handleTouchEnd = () => {
+    setIsDrawing(false);
+  };
 
   return (
     <ThemedView style={styles.container}>
       {/* Drawing Area */}
-      <View style={styles.drawingArea}>
+      <View 
+        style={styles.drawingArea}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
         {/* Render trail points */}
         {trail.map((point) => (
           <View
@@ -93,31 +107,19 @@ export default function HomeScreen() {
             ]}
           />
         ))}
-        
-        {/* Moving ball */}
-        <Animated.View
-          style={[
-            styles.ball,
-            {
-              transform: [
-                { translateX: pan.x },
-                { translateY: pan.y }
-              ],
-              backgroundColor: currentColor,
-            }
-          ]}
-          {...panResponder.panHandlers}
-        />
       </View>
 
       {/* Color Picker */}
       <View style={styles.colorPicker}>
-        {COLORS.map((color, index) => (
+        {COLORS.map((color) => (
           <Pressable
             key={color}
             style={[
               styles.colorOption,
-              { backgroundColor: color }
+              { 
+                backgroundColor: color,
+                borderWidth: color === currentColor ? 4 : 2,
+              }
             ]}
             onPress={() => setCurrentColor(color)}
           />
@@ -130,7 +132,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    flexDirection: 'row', // For landscape mode
+    flexDirection: 'row',
   },
   drawingArea: {
     flex: 1,
@@ -144,12 +146,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ball: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    position: 'absolute',
-  },
   trailPoint: {
     width: 60,
     height: 60,
@@ -161,7 +157,6 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     margin: 5,
-    borderWidth: 2,
     borderColor: '#fff',
   }
 });
