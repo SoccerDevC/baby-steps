@@ -12,6 +12,34 @@ export default function HomeScreen() {
   const pan = useRef(new Animated.ValueXY()).current;
   const [trail, setTrail] = useState<TrailPoint[]>([]);
   const nextId = useRef(0);
+  const lastPoint = useRef({ x: 0, y: 0 });
+
+  const addTrailPoint = (x: number, y: number) => {
+    // Calculate distance from last point
+    const dx = x - lastPoint.current.x;
+    const dy = y - lastPoint.current.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // If distance is significant, add intermediate points
+    if (distance > 5) {
+      const steps = Math.floor(distance / 5);
+      for (let i = 1; i <= steps; i++) {
+        const ratio = i / steps;
+        const interpolatedX = lastPoint.current.x + dx * ratio;
+        const interpolatedY = lastPoint.current.y + dy * ratio;
+        setTrail(currentTrail => [
+          ...currentTrail,
+          {
+            x: interpolatedX,
+            y: interpolatedY,
+            id: nextId.current++
+          }
+        ]);
+      }
+    }
+    
+    lastPoint.current = { x, y };
+  };
 
   const panResponder = useRef(
     PanResponder.create({
@@ -22,15 +50,7 @@ export default function HomeScreen() {
           { dx: pan.x, dy: pan.y }
         ], { useNativeDriver: false })(_, gestureState);
 
-        // Add new point to trail
-        setTrail(currentTrail => [
-          ...currentTrail,
-          {
-            x: gestureState.moveX,
-            y: gestureState.moveY,
-            id: nextId.current++
-          }
-        ]);
+        addTrailPoint(gestureState.moveX, gestureState.moveY);
       },
       onPanResponderRelease: () => {
         Animated.spring(pan, {
@@ -50,8 +70,8 @@ export default function HomeScreen() {
           style={[
             styles.trailPoint,
             {
-              left: point.x - 10, // Offset by half the width
-              top: point.y - 10,  // Offset by half the height
+              left: point.x - 30, // Offset by half the width
+              top: point.y - 30,  // Offset by half the height
             }
           ]}
         />
@@ -88,9 +108,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
   trailPoint: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: 'rgba(255, 255, 0, 0.3)',
     position: 'absolute',
   }
