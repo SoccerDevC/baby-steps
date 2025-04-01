@@ -1,13 +1,26 @@
 "use client"
 
-import { useState, useRef } from "react"
-import { StyleSheet, View, PanResponder, Animated, Dimensions, TouchableOpacity } from "react-native"
+import { useState, useEffect } from "react"
+import { StyleSheet, View, PanResponder, Dimensions, TouchableOpacity, Text } from "react-native"
 import { ThemedText } from "@/components/ThemedText"
 import { ThemedView } from "@/components/ThemedView"
 import { IconSymbol } from "@/components/ui/IconSymbol"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useColorScheme } from "@/hooks/useColorScheme"
 import Svg, { Polyline } from "react-native-svg"
+
+// Define types for our drawing data
+interface Point {
+  x: number
+  y: number
+}
+
+interface DrawPath {
+  id: string
+  path: Point[]
+  color: string
+  size: number
+}
 
 const COLORS = [
   "#FF5252", // Red
@@ -30,56 +43,47 @@ export default function ColoringGameScreen() {
   const colorScheme = useColorScheme()
   const [selectedColor, setSelectedColor] = useState(COLORS[0])
   const [brushSize, setBrushSize] = useState(10)
-  const [paths, setPaths] = useState<Array<{ path: Array<{ x: number; y: number }>; color: string; size: number }>>([])
-  const [currentPath, setCurrentPath] = useState<Array<{ x: number; y: number }>>([])
+  // Properly type the state variables
+  const [paths, setPaths] = useState<DrawPath[]>([])
+  const [currentPath, setCurrentPath] = useState<Point[]>([])
+  const [isDrawing, setIsDrawing] = useState(false)
 
-  // Reference to the canvas view for measurements
-  const canvasRef = useRef<View>(null)
-  const [canvasLayout, setCanvasLayout] = useState({ x: 0, y: 0, width: 0, height: 0 })
+  // Log when paths change
+  useEffect(() => {
+    console.log(`Paths updated. Count: ${paths.length}`)
+  }, [paths])
 
-  // Animation value for color palette
-  const paletteAnimation = useRef(new Animated.Value(0)).current
-  const [isPaletteVisible, setIsPaletteVisible] = useState(false)
-
-  // Set up pan responder for drawing
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt) => {
-        const { locationX, locationY } = evt.nativeEvent
-        setCurrentPath([{ x: locationX, y: locationY }])
-      },
-      onPanResponderMove: (evt) => {
-        const { locationX, locationY } = evt.nativeEvent
-        setCurrentPath((prevPath) => [...prevPath, { x: locationX, y: locationY }])
-      },
-      onPanResponderRelease: () => {
-        if (currentPath.length > 0) {
-          setPaths((prevPaths) => [...prevPaths, { path: currentPath, color: selectedColor, size: brushSize }])
-          setCurrentPath([])
-        }
-      },
-    }),
-  ).current
-
-  // Toggle color palette
-  const togglePalette = () => {
-    if (isPaletteVisible) {
-      Animated.timing(paletteAnimation, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => setIsPaletteVisible(false))
-    } else {
-      setIsPaletteVisible(true)
-      Animated.timing(paletteAnimation, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start()
-    }
-  }
+  // Create the pan responder
+  const panResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: (evt) => {
+      const { locationX, locationY } = evt.nativeEvent
+      setIsDrawing(true)
+      setCurrentPath([{ x: locationX, y: locationY }])
+    },
+    onPanResponderMove: (evt) => {
+      if (!isDrawing) return
+      const { locationX, locationY } = evt.nativeEvent
+      setCurrentPath((prevPath) => [...prevPath, { x: locationX, y: locationY }])
+    },
+    onPanResponderRelease: () => {
+      if (currentPath.length > 0) {
+        // Important: Use functional update to ensure we're working with the latest state
+        setPaths((prevPaths) => [
+          ...prevPaths,
+          {
+            id: Date.now().toString(), // Add unique ID
+            path: currentPath,
+            color: selectedColor,
+            size: brushSize,
+          },
+        ])
+        setCurrentPath([])
+        setIsDrawing(false)
+      }
+    },
+  })
 
   // Clear canvas
   const clearCanvas = () => {
@@ -91,148 +95,100 @@ export default function ColoringGameScreen() {
     setBrushSize(size)
   }
 
-  // Render paths on canvas
-  const renderPaths = () => {
-    return paths.map((item, index) => {
-      const points = item.path.map((point) => `${point.x},${point.y}`).join(" ")
-      return (
-        <View key={index} style={styles.pathContainer}>
-          <Svg height="100%" width="100%" style={styles.svg}>
-            <Polyline
-              points={points}
-              fill="none"
-              stroke={item.color}
-              strokeWidth={item.size}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
-        </View>
-      )
-    })
-  }
-
-  // Render current path while drawing
-  const renderCurrentPath = () => {
-    if (currentPath.length === 0) return null
-
-    const points = currentPath.map((point) => `${point.x},${point.y}`).join(" ")
-    return (
-      <View style={styles.pathContainer}>
-        <Svg height="100%" width="100%" style={styles.svg}>
-          <Polyline
-            points={points}
-            fill="none"
-            stroke={selectedColor}
-            strokeWidth={brushSize}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      </View>
-    )
-  }
-
   return (
-    <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
+    <ThemedView style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <ThemedView style={styles.header}>
         <ThemedText type="title">Coloring Game</ThemedText>
         <View style={styles.headerButtons}>
-          <TouchableOpacity onPress={togglePalette} style={styles.iconButton}>
-            <IconSymbol size={24} color={selectedColor} name="paintpalette" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={clearCanvas} style={styles.iconButton}>
-            <IconSymbol size={24} color={colorScheme === "dark" ? "#FFFFFF" : "#000000"} name="trash" />
-          </TouchableOpacity>
+          <Text style={styles.debugText}>{paths.length} paths</Text>
         </View>
       </ThemedView>
 
-      <View
-        style={styles.canvasContainer}
-        ref={canvasRef}
-        onLayout={(event) => {
-          if (canvasRef.current) {
-            canvasRef.current.measure((x, y, width, height, pageX, pageY) => {
-              setCanvasLayout({ x: pageX, y: pageY, width, height })
-            })
-          }
-        }}
-        {...panResponder.panHandlers}
-      >
-        <IconSymbol
-          size={width * 0.8}
-          color={colorScheme === "dark" ? "#353636" : "#D0D0D0"}
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.backgroundImage}
-        />
-        {renderPaths()}
-        {renderCurrentPath()}
+      <View style={styles.canvasContainer} {...panResponder.panHandlers}>
+        {/* Background Image */}
+        <View style={styles.backgroundImageContainer} pointerEvents="none">
+          <IconSymbol
+            size={width * 0.8}
+            color={colorScheme === "dark" ? "#353636" : "#D0D0D0"}
+            name="chevron.left.forwardslash.chevron.right"
+          />
+        </View>
+
+        {/* Saved Paths Layer */}
+        <View style={styles.pathsLayer} pointerEvents="none">
+          {paths.map((item) => (
+            <View key={item.id} style={styles.pathContainer}>
+              <Svg height="100%" width="100%">
+                <Polyline
+                  points={item.path.map((point) => `${point.x},${point.y}`).join(" ")}
+                  fill="none"
+                  stroke={item.color}
+                  strokeWidth={item.size}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+          ))}
+        </View>
+
+        {/* Current Drawing Path Layer */}
+        {currentPath.length > 0 && (
+          <View style={styles.pathContainer} pointerEvents="none">
+            <Svg height="100%" width="100%">
+              <Polyline
+                points={currentPath.map((point) => `${point.x},${point.y}`).join(" ")}
+                fill="none"
+                stroke={selectedColor}
+                strokeWidth={brushSize}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+          </View>
+        )}
       </View>
 
-      {isPaletteVisible && (
-        <Animated.View
-          style={[
-            styles.colorPalette,
-            {
-              transform: [
-                {
-                  translateY: paletteAnimation.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [200, 0],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
-          <View style={styles.colorRow}>
-            {COLORS.slice(0, 6).map((color) => (
-              <TouchableOpacity
-                key={color}
+      {/* Fixed Color Palette at Bottom */}
+      <View style={styles.colorPalette}>
+        <View style={styles.colorRow}>
+          {/* Color circles */}
+          {COLORS.map((color) => (
+            <TouchableOpacity
+              key={color}
+              style={[styles.colorButton, { backgroundColor: color }, selectedColor === color && styles.selectedColor]}
+              onPress={() => setSelectedColor(color)}
+            />
+          ))}
+
+          {/* Clear button as the last circle */}
+          <TouchableOpacity style={[styles.colorButton, styles.clearButton]} onPress={clearCanvas}>
+            <IconSymbol size={20} color={colorScheme === "dark" ? "#FFFFFF" : "#000000"} name="trash" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Brush size selector */}
+        <View style={styles.brushSizes}>
+          {[5, 10, 15, 20].map((size) => (
+            <TouchableOpacity
+              key={size}
+              style={[styles.brushButton, brushSize === size && styles.selectedBrush]}
+              onPress={() => changeBrushSize(size)}
+            >
+              <View
                 style={[
-                  styles.colorButton,
-                  { backgroundColor: color },
-                  selectedColor === color && styles.selectedColor,
+                  styles.brushPreview,
+                  {
+                    width: size,
+                    height: size,
+                    backgroundColor: selectedColor,
+                  },
                 ]}
-                onPress={() => setSelectedColor(color)}
               />
-            ))}
-          </View>
-          <View style={styles.colorRow}>
-            {COLORS.slice(6).map((color) => (
-              <TouchableOpacity
-                key={color}
-                style={[
-                  styles.colorButton,
-                  { backgroundColor: color },
-                  selectedColor === color && styles.selectedColor,
-                ]}
-                onPress={() => setSelectedColor(color)}
-              />
-            ))}
-          </View>
-          <View style={styles.brushSizes}>
-            {[5, 10, 15, 20].map((size) => (
-              <TouchableOpacity
-                key={size}
-                style={[styles.brushButton, brushSize === size && styles.selectedBrush]}
-                onPress={() => changeBrushSize(size)}
-              >
-                <View
-                  style={[
-                    styles.brushPreview,
-                    {
-                      width: size,
-                      height: size,
-                      backgroundColor: selectedColor,
-                    },
-                  ]}
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Animated.View>
-      )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
     </ThemedView>
   )
 }
@@ -251,20 +207,29 @@ const styles = StyleSheet.create({
   headerButtons: {
     flexDirection: "row",
     gap: 16,
+    alignItems: "center",
   },
-  iconButton: {
-    padding: 8,
+  debugText: {
+    fontSize: 12,
+    opacity: 0.5,
   },
   canvasContainer: {
     flex: 1,
     position: "relative",
   },
-  backgroundImage: {
+  backgroundImageContainer: {
     position: "absolute",
     top: "50%",
     left: "50%",
-    marginLeft: -width * 0.4,
-    marginTop: -width * 0.4,
+    transform: [{ translateX: -width * 0.4 }, { translateY: -width * 0.4 }],
+  },
+  pathsLayer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
   },
   pathContainer: {
     position: "absolute",
@@ -273,23 +238,18 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  svg: {
-    backgroundColor: "transparent",
-  },
   colorPalette: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: "rgba(0, 0, 0, 0.8)",
     padding: 16,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
+    zIndex: 100,
   },
   colorRow: {
     flexDirection: "row",
     justifyContent: "space-around",
     marginBottom: 16,
+    flexWrap: "wrap",
   },
   colorButton: {
     width: 40,
@@ -297,6 +257,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 2,
     borderColor: "transparent",
+    margin: 4,
+  },
+  clearButton: {
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   selectedColor: {
     borderColor: "#FFFFFF",
