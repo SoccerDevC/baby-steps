@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { StyleSheet, View, PanResponder, Dimensions, TouchableOpacity, Text } from "react-native"
+import { StyleSheet, View, PanResponder, Dimensions, TouchableOpacity, Text, ImageBackground } from "react-native"
 import { ThemedText } from "@/components/ThemedText"
 import { ThemedView } from "@/components/ThemedView"
 import { IconSymbol } from "@/components/ui/IconSymbol"
@@ -38,6 +38,10 @@ const COLORS = [
 
 const { width, height } = Dimensions.get("window")
 
+// Direct image import to ensure it works
+const COLORING_IMAGE =
+  "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/king%20%281%29.jpg-z9Lbm4ECwrhz00NyM13OvVjxEotVYN.jpeg"
+
 export default function ColoringGameScreen() {
   const insets = useSafeAreaInsets()
   const colorScheme = useColorScheme()
@@ -47,6 +51,7 @@ export default function ColoringGameScreen() {
   const [paths, setPaths] = useState<DrawPath[]>([])
   const [currentPath, setCurrentPath] = useState<Point[]>([])
   const [isDrawing, setIsDrawing] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
 
   // Log when paths change
   useEffect(() => {
@@ -104,47 +109,56 @@ export default function ColoringGameScreen() {
         </View>
       </ThemedView>
 
-      <View style={styles.canvasContainer} {...panResponder.panHandlers}>
-        {/* Background Image */}
-        <View style={styles.backgroundImageContainer} pointerEvents="none">
-          <IconSymbol
-            size={width * 0.8}
-            color={colorScheme === "dark" ? "#353636" : "#D0D0D0"}
-            name="chevron.left.forwardslash.chevron.right"
-          />
-        </View>
-
-        {/* Saved Paths Layer */}
-        <View style={styles.pathsLayer} pointerEvents="none">
-          {paths.map((item) => (
-            <View key={item.id} style={styles.pathContainer}>
-              <Svg height="100%" width="100%">
-                <Polyline
-                  points={item.path.map((point) => `${point.x},${point.y}`).join(" ")}
-                  fill="none"
-                  stroke={item.color}
-                  strokeWidth={item.size}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
+      <View style={styles.canvasContainer}>
+        {/* Background Image as a full container */}
+        <ImageBackground
+          source={{ uri: COLORING_IMAGE }}
+          style={styles.backgroundImage}
+          resizeMode="contain"
+          onLoad={() => setImageLoaded(true)}
+        >
+          {/* Drawing area with pan responder */}
+          <View style={styles.drawingArea} {...panResponder.panHandlers}>
+            {/* Saved Paths Layer */}
+            <View style={styles.pathsLayer} pointerEvents="none">
+              {paths.map((item) => (
+                <View key={item.id} style={styles.pathContainer}>
+                  <Svg height="100%" width="100%">
+                    <Polyline
+                      points={item.path.map((point) => `${point.x},${point.y}`).join(" ")}
+                      fill="none"
+                      stroke={item.color}
+                      strokeWidth={item.size}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </Svg>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
 
-        {/* Current Drawing Path Layer */}
-        {currentPath.length > 0 && (
-          <View style={styles.pathContainer} pointerEvents="none">
-            <Svg height="100%" width="100%">
-              <Polyline
-                points={currentPath.map((point) => `${point.x},${point.y}`).join(" ")}
-                fill="none"
-                stroke={selectedColor}
-                strokeWidth={brushSize}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
+            {/* Current Drawing Path Layer */}
+            {currentPath.length > 0 && (
+              <View style={styles.pathContainer} pointerEvents="none">
+                <Svg height="100%" width="100%">
+                  <Polyline
+                    points={currentPath.map((point) => `${point.x},${point.y}`).join(" ")}
+                    fill="none"
+                    stroke={selectedColor}
+                    strokeWidth={brushSize}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+              </View>
+            )}
+          </View>
+        </ImageBackground>
+
+        {/* Image loading indicator */}
+        {!imageLoaded && (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading coloring page...</Text>
           </View>
         )}
       </View>
@@ -163,7 +177,8 @@ export default function ColoringGameScreen() {
 
           {/* Clear button as the last circle */}
           <TouchableOpacity style={[styles.colorButton, styles.clearButton]} onPress={clearCanvas}>
-            <IconSymbol size={20} color={colorScheme === "dark" ? "#FFFFFF" : "#000000"} name="trash" />
+            <IconSymbol size={20} color="#FFFFFF" name="trash" />
+            <Text style={styles.clearButtonText}>Clear</Text>
           </TouchableOpacity>
         </View>
 
@@ -216,12 +231,22 @@ const styles = StyleSheet.create({
   canvasContainer: {
     flex: 1,
     position: "relative",
+    backgroundColor: "#FFFFFF", // White background to make the image visible
   },
-  backgroundImageContainer: {
+  backgroundImage: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  drawingArea: {
     position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: [{ translateX: -width * 0.4 }, { translateY: -width * 0.4 }],
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "transparent",
   },
   pathsLayer: {
     position: "absolute",
@@ -260,9 +285,14 @@ const styles = StyleSheet.create({
     margin: 4,
   },
   clearButton: {
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    backgroundColor: "#FF3B30",
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 3,
+    borderColor: "#FFFFFF",
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
   selectedColor: {
     borderColor: "#FFFFFF",
@@ -287,6 +317,26 @@ const styles = StyleSheet.create({
   },
   brushPreview: {
     borderRadius: 50,
+  },
+  clearButtonText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    marginTop: 2,
+    fontWeight: "bold",
+  },
+  loadingContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
+  },
+  loadingText: {
+    fontSize: 18,
+    fontWeight: "bold",
   },
 })
 
